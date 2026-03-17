@@ -1,24 +1,22 @@
 /**
  * ESP32-C3 + 0.42" OLED (72x40) + Ultrasonic distance (AJ-SR04M)
  *
- * Display:
- * - The tiny 0.42" modules used with the ESP32-C3 are often SH1106-based and/or use a
- *   non-standard resolution like 72x40.
- * - The Adafruit_SSD1306 library is mainly targeted at SSD1306 128x64/128x32 displays.
- *   For these small SH1106/72x40 modules it can be unreliable or not directly supported
- *   without extra glue.
- * - U8g2 has broad controller + resolution support and your project already has a working
- *   constructor for this exact display, so we use U8g2 here.
+ * Display
+ * - 0.42" OLED modules for ESP32-C3 commonly use SH1106 controllers.
+ * - This module resolution is 72x40.
+ * - U8g2 is used for SH1106/72x40 support.
  *
- * Wiring (based on https://emalliab.wordpress.com/2025/02/12/esp32-c3-0-42-oled/ and
- * your working `main_mini_c3abrobot.cpp`):
+ * Wiring (based on https://emalliab.wordpress.com/2025/02/12/esp32-c3-0-42-oled/):
  * - OLED I2C: SDA=GPIO5, SCL=GPIO6
  * - Ultrasonic: TRIG=GPIO2 (OUT), ECHO=GPIO0 (IN)
  *
+ * AJ-SR04M
+ * User Manual https://www.fabian.com.mt/viewer/42585/pdf.pdf
+ *
  * IMPORTANT (Echo level shifting):
- * Many ultrasonic modules output ~5V on ECHO. ESP32-C3 GPIOs are 3.3V only.
- * Use a resistor divider / level shifter.
- * Example divider you used before:
+ * - This sensor may have 5V ECHO output on some boards.
+ * - ESP32-C3 GPIO inputs are 3.3V max.
+ * - A level shifter / resistor divider is required on ECHO.
  *   Rtop   = 1k  (ECHO -> node)
  *   Rbottom= 2k  (node -> GND)  (two 1k in series)
  * Divider math:
@@ -31,12 +29,12 @@
 #include <U8g2lib.h>
 #include <Wire.h>
 
-// OLED: 72x40 I2C, same constructor/pins as in main_mini_c3abrobot.cpp
+// OLED: 72x40 I2C (GPIO6=SCL, GPIO5=SDA)
 // (U8g2 pins here override the default Wire pins)
 U8G2_SSD1306_72X40_ER_F_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE,
 				    /* clock=*/6, /* data=*/5);
 
-// Perfboard wiring
+// Pin mapping (on perfboard)
 static constexpr uint8_t PIN_TRIG = 2;
 static constexpr uint8_t PIN_ECHO = 0;
 
@@ -54,7 +52,7 @@ void setup()
 	pinMode(PIN_ECHO, INPUT);
 	digitalWrite(PIN_TRIG, LOW);
 
-	// Optional: onboard LED on many ESP32-C3 DevKitM-1 setups is GPIO8
+	// Onboard LED (common on ESP32-C3 DevKitM-1): GPIO8
 	pinMode(8, OUTPUT);
 	digitalWrite(8, LOW);
 
@@ -76,7 +74,7 @@ void loop()
 
 	if (distCm < 0)
 	{
-		// Timeout / no echo
+		// No echo (timeout)
 		u8g2.drawStr(0, 22, "No echo");
 		u8g2.drawStr(0, 32, "(check wiring)");
 		Serial.println("Distance: no echo / timeout");
@@ -84,7 +82,7 @@ void loop()
 	else
 	{
 		char buf[16];
-		// Big readable font for the 72x40 screen
+		// Large font for 72x40
 		u8g2.setFont(u8g2_font_logisoso18_tn);
 		snprintf(buf, sizeof(buf), "%.1f", distCm);
 		u8g2.drawStr(0, 38, buf);
@@ -108,17 +106,24 @@ static float measureDistanceCmOnce()
 	delayMicroseconds(10);
 	digitalWrite(PIN_TRIG, LOW);
 
+	// pulseIn(): measures ECHO HIGH time in microseconds = round-trip time of sound
 	const uint32_t duration = pulseIn(PIN_ECHO, HIGH, PULSE_TIMEOUT_US);
 	if (duration == 0)
 	{
 		return -1.0f; // timeout / no echo
 	}
 
-	// Speed of sound: ~343 m/s => 0.0343 cm/us
-	// Distance is half the round-trip
+	// Distance calculation:
+	//   Speed of sound: 343 m/s @ ~20°C = 0.0343 cm/us
+	//   Total distance = duration (us) * speed (cm/us)
+	//   One-way distance = Total distance / 2 (because the pulse travels to the object and back)
 	return (static_cast<float>(duration) * 0.0343f) / 2.0f;
 }
 
+// Average N samples:
+// - accumulate only d >= 0 (valid) readings
+// - delay(30) between samples
+// - return -1 if no valid readings
 static float measureDistanceCmAverage(uint8_t samples)
 {
 	float total = 0.0f;
