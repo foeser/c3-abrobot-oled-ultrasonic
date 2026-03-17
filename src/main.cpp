@@ -13,7 +13,7 @@
  * Wiring (based on https://emalliab.wordpress.com/2025/02/12/esp32-c3-0-42-oled/ and
  * your working `main_mini_c3abrobot.cpp`):
  * - OLED I2C: SDA=GPIO5, SCL=GPIO6
- * - Ultrasonic: TRIG=GPIO4 (OUT), ECHO=GPIO3 (IN)
+ * - Ultrasonic: TRIG=GPIO2 (OUT), ECHO=GPIO0 (IN)
  *
  * IMPORTANT (Echo level shifting):
  * Many ultrasonic modules output ~5V on ECHO. ESP32-C3 GPIOs are 3.3V only.
@@ -36,8 +36,9 @@
 U8G2_SSD1306_72X40_ER_F_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE,
 				    /* clock=*/6, /* data=*/5);
 
-static constexpr uint8_t PIN_TRIG = 4;
-static constexpr uint8_t PIN_ECHO = 3;
+// Perfboard wiring
+static constexpr uint8_t PIN_TRIG = 2;
+static constexpr uint8_t PIN_ECHO = 0;
 
 static constexpr uint32_t PULSE_TIMEOUT_US = 30000; // 30ms ~ 5m max distance
 
