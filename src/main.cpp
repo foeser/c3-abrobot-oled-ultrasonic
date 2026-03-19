@@ -28,6 +28,7 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <Wire.h>
+#include <Preferences.h>
 
 // OLED: 72x40 I2C (GPIO6=SCL, GPIO5=SDA)
 // (U8g2 pins here override the default Wire pins)
@@ -39,6 +40,44 @@ static constexpr uint8_t PIN_TRIG = 2;
 static constexpr uint8_t PIN_ECHO = 0;
 
 static constexpr uint32_t PULSE_TIMEOUT_US = 30000; // 30ms ~ 5m max distance
+
+// double-reset detection across EN/RESET button presses
+// RTC memory seems to get cleared on this (C3) board so using NVS
+// Behavior:
+// - First reset/boot: write a flag to NVS and enters PERIODIC
+// - Second reset: reset the flag and enters DEBUG_CONTINUOUS
+// effectively becomes an every-second-reset toggle
+enum class RunMode : uint8_t
+{
+	DEBUG_CONTINUOUS = 0,
+	PERIODIC = 1
+};
+
+static constexpr const char *NVS_NS = "runmode";
+static constexpr const char *NVS_KEY_DEBUG_NEXT_BOOT = "debug_next_boot";
+
+static Preferences g_prefs;
+
+static RunMode detectRunModeByDoubleReset()
+{
+	g_prefs.begin(NVS_NS, false);
+
+	const bool debug_on_next_boot = g_prefs.getBool(NVS_KEY_DEBUG_NEXT_BOOT, false);
+	if (debug_on_next_boot)
+	{
+		g_prefs.putBool(NVS_KEY_DEBUG_NEXT_BOOT, false);
+		g_prefs.end();
+		return RunMode::DEBUG_CONTINUOUS;
+	}
+
+	// enable debug on the next boot
+	g_prefs.putBool(NVS_KEY_DEBUG_NEXT_BOOT, true);
+	g_prefs.end();
+
+	return RunMode::PERIODIC;
+}
+
+static RunMode g_mode = RunMode::PERIODIC;
 
 enum class MeasureStatus
 {
@@ -59,6 +98,8 @@ static MeasureResult measureDistanceCmMedian(uint8_t samples, uint8_t minValidRe
 
 void setup()
 {
+	g_mode = detectRunModeByDoubleReset();
+
 	Serial.begin(115200);
 	delay(3000); // allow Serial Monitor attach, but still boot standalone
 
@@ -74,6 +115,12 @@ void setup()
 	u8g2.setContrast(255);
 
 	Serial.println("ESP32-C3 ultrasonic + U8g2 OLED starting...");
+	Serial.printf("Reset reason (CPU0): %d\n", static_cast<int>(esp_reset_reason()));
+
+	if (g_mode == RunMode::DEBUG_CONTINUOUS)
+		Serial.println("Mode: DEBUG (continuous). Double-reset detected.");
+	else
+		Serial.println("Mode: PERIODIC (slow updates).");
 }
 
 void loop()
@@ -85,7 +132,11 @@ void loop()
 
 	u8g2.clearBuffer();
 	u8g2.setFont(u8g2_font_5x7_tf);
-	u8g2.drawStr(0, 8, "AJ-SR04M Dist:");
+
+	if (g_mode == RunMode::DEBUG_CONTINUOUS)
+		u8g2.drawStr(0, 8, "AJ-SR04M (debug):");
+	else
+		u8g2.drawStr(0, 8, "AJ-SR04M Dist:");
 
 	switch (res.status)
 	{
@@ -111,7 +162,11 @@ void loop()
 	}
 
 	u8g2.sendBuffer();
-	delay(250);
+
+	if (g_mode == RunMode::DEBUG_CONTINUOUS)
+		delay(250);
+	else
+		delay(60UL * 60UL * 1000UL); // 1 hour
 }
 
 static MeasureResult measureDistanceCmOnce()
