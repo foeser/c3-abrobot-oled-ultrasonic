@@ -17,9 +17,9 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <Wire.h>
-#include <Preferences.h>
 
 #include "types.h"
+#include "run_mode.h"
 #include "ultrasonic.h"
 
 // OLED: 72x40 I2C (GPIO6=SCL, GPIO5=SDA)
@@ -34,30 +34,6 @@ static constexpr uint8_t PIN_ECHO = 0;
 static constexpr uint32_t PULSE_TIMEOUT_US = 30000; // 30ms ~ 5m max distance
 
 static UltrasonicSensor g_ultrasonic(PIN_TRIG, PIN_ECHO, PULSE_TIMEOUT_US);
-
-static constexpr const char *NVS_NS = "runmode";
-static constexpr const char *NVS_KEY_DEBUG_NEXT_BOOT = "debug_next_boot";
-
-static Preferences g_prefs;
-
-static RunMode detectRunModeByDoubleReset()
-{
-	g_prefs.begin(NVS_NS, false);
-
-	const bool debug_on_next_boot = g_prefs.getBool(NVS_KEY_DEBUG_NEXT_BOOT, false);
-	if (debug_on_next_boot)
-	{
-		g_prefs.putBool(NVS_KEY_DEBUG_NEXT_BOOT, false);
-		g_prefs.end();
-		return RunMode::DEBUG_CONTINUOUS;
-	}
-
-	// enable debug on the next boot
-	g_prefs.putBool(NVS_KEY_DEBUG_NEXT_BOOT, true);
-	g_prefs.end();
-
-	return RunMode::PERIODIC;
-}
 
 static RunMode g_mode = RunMode::PERIODIC;
 
