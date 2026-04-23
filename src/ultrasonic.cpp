@@ -46,7 +46,7 @@ MeasureResult UltrasonicSensor::measureOnce() const
 	//   One-way distance = Total distance / 2 (because the pulse travels to the object and back)
 	const float distanceCm = (static_cast<float>(duration) * 0.0343f) / 2.0f;
 
-	return {MeasureStatus::OK, distanceCm, 0};
+	return {MeasureStatus::OK, distanceCm, 1};
 }
 
 // Median of N samples with a minimum valid requirement:

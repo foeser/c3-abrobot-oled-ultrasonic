@@ -33,16 +33,22 @@ static constexpr uint8_t PIN_TRIG = 2;
 static constexpr uint8_t PIN_ECHO = 0;
 
 static constexpr uint32_t PULSE_TIMEOUT_US = 30000; // 30ms ~ 5m max distance
-
 static UltrasonicSensor g_ultrasonic(PIN_TRIG, PIN_ECHO, PULSE_TIMEOUT_US);
 
 static MeasurementLog g_store;
 
+static constexpr uint32_t PERIODIC_INTERVAL_MS = 60UL * 60UL * 1000UL; // 1 hour
+static constexpr uint32_t DEBUG_INTERVAL_MS = 250UL;
 static RunMode g_mode = RunMode::PERIODIC;
+static uint32_t g_measurementIntervalMs = PERIODIC_INTERVAL_MS;
+static uint32_t g_lastMeasurementAtMs = 0;
+static MeasureResult g_lastMeasurement = {MeasureStatus::ERROR, 0.0f, 0};
 
 void setup()
 {
 	g_mode = detectRunModeByDoubleReset();
+	g_measurementIntervalMs =
+		(g_mode == RunMode::DEBUG_CONTINUOUS) ? DEBUG_INTERVAL_MS : PERIODIC_INTERVAL_MS;
 
 	Serial.begin(115200);
 	delay(3000); // allow Serial Monitor attach, but still boot standalone
@@ -60,34 +66,45 @@ void setup()
 	Serial.printf("Reset reason (CPU0): %d\n", static_cast<int>(esp_reset_reason()));
 
 	if (!g_store.begin())
-		Serial.println("MeasurementStore: begin() failed");
-
-	// Per requirement: entering DEBUG mode clears stored measurements.
-	if (g_mode == RunMode::DEBUG_CONTINUOUS)
-	{
-		Serial.println("DEBUG mode: clearing stored measurements");
-		g_store.clear();
-	}
+		Serial.println("MeasurementLog: begin() failed");
 
 	if (g_mode == RunMode::DEBUG_CONTINUOUS)
 		Serial.println("Mode: DEBUG (continuous). Double-reset detected.");
 	else
 		Serial.println("Mode: PERIODIC (slow updates).");
+
+	// Trigger the first measurement immediately after boot
+	g_lastMeasurementAtMs = millis() - g_measurementIntervalMs;
 }
 
 void loop()
 {
-	digitalWrite(8, !digitalRead(8));
 
-	// Take 9 samples, require at least 5 valid ones to form a robust median
-	const MeasureResult res = g_ultrasonic.measureMedian(9, 5);
+	const uint32_t nowMs = millis();
 
-	// Persist valid sample in periodic mode.
-	if (g_mode == RunMode::PERIODIC && res.status == MeasureStatus::OK)
+	if (nowMs - g_lastMeasurementAtMs >= g_measurementIntervalMs)
 	{
-		const uint32_t uptimeSeconds = millis() / 1000UL;
-		if (!g_store.append(res.distanceCm, uptimeSeconds))
-			Serial.println("MeasurementStore: append failed");
+		digitalWrite(8, !digitalRead(8));
+
+		// Take 9 samples, require at least 5 valid ones to form a robust median
+		g_lastMeasurement = g_ultrasonic.measureMedian(9, 5);
+		// Store timestamp after measurement so debug mode still waits 250ms between runs
+		g_lastMeasurementAtMs = millis();
+
+		// Persist valid sample in periodic mode
+		if (g_mode == RunMode::PERIODIC && g_lastMeasurement.status == MeasureStatus::OK)
+		{
+			const uint32_t uptimeSeconds = millis() / 1000UL;
+			if (!g_store.append(g_lastMeasurement.distanceCm, uptimeSeconds))
+				Serial.println("MeasurementLog: append failed");
+		}
+
+		if (g_lastMeasurement.status == MeasureStatus::ERROR)
+			Serial.printf("Distance: ERROR (valid: %u)\n", g_lastMeasurement.validSamples);
+		else
+			Serial.printf("Distance: %.1f cm (median of %u valid)\n",
+				      g_lastMeasurement.distanceCm,
+				      g_lastMeasurement.validSamples);
 	}
 
 	u8g2.clearBuffer();
@@ -98,33 +115,28 @@ void loop()
 	else
 		u8g2.drawStr(0, 8, "AJ-SR04M Dist:");
 
-	switch (res.status)
+	switch (g_lastMeasurement.status)
 	{
-	case MeasureStatus::ERROR:
-		u8g2.drawStr(0, 22, "Measurement");
-		u8g2.drawStr(0, 32, "Failed");
-		Serial.printf("Distance: ERROR (valid: %u)\n", res.validSamples);
-		break;
-	case MeasureStatus::OK:
-	{
-		char buf[16];
-		// Large font for 72x40
-		u8g2.setFont(u8g2_font_logisoso18_tn);
-		snprintf(buf, sizeof(buf), "%.1f", res.distanceCm);
-		u8g2.drawStr(0, 38, buf);
+		case MeasureStatus::ERROR:
+			u8g2.drawStr(0, 22, "Measurement");
+			u8g2.drawStr(0, 32, "Failed");
+			Serial.printf("Distance: ERROR (valid: %u)\n", g_lastMeasurement.validSamples);
+			break;
+		case MeasureStatus::OK:
+		{
+			char buf[16];
+			// Large font for 72x40
+			u8g2.setFont(u8g2_font_logisoso18_tn);
+			snprintf(buf, sizeof(buf), "%.1f", g_lastMeasurement.distanceCm);
+			u8g2.drawStr(0, 38, buf);
 
-		u8g2.setFont(u8g2_font_5x7_tf);
-		u8g2.drawStr(56, 38, "cm");
+			u8g2.setFont(u8g2_font_5x7_tf);
+			u8g2.drawStr(56, 38, "cm");
 
-		Serial.printf("Distance: %.1f cm (median of %u valid)\n", res.distanceCm, res.validSamples);
-		break;
-	}
+			Serial.printf("Distance: %.1f cm (median of %u valid)\n", g_lastMeasurement.distanceCm, g_lastMeasurement.validSamples);
+			break;
+		}
 	}
 
 	u8g2.sendBuffer();
-
-	if (g_mode == RunMode::DEBUG_CONTINUOUS)
-		delay(250);
-	else
-		delay(60UL * 60UL * 1000UL); // 1 hour
 }

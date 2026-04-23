@@ -18,7 +18,7 @@ struct MeasureResult
 {
 	MeasureStatus status;
 	float distanceCm;
-	uint8_t validSamples; // how many samples were OK (used for median)
+	uint8_t validSamples; // how many underlying samples were valid
 };
 
 struct StoredSample
