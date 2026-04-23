@@ -21,6 +21,7 @@
 #include "types.h"
 #include "run_mode.h"
 #include "ultrasonic.h"
+#include "measurement_log.h"
 
 // OLED: 72x40 I2C (GPIO6=SCL, GPIO5=SDA)
 // (U8g2 pins here override the default Wire pins)
@@ -34,6 +35,8 @@ static constexpr uint8_t PIN_ECHO = 0;
 static constexpr uint32_t PULSE_TIMEOUT_US = 30000; // 30ms ~ 5m max distance
 
 static UltrasonicSensor g_ultrasonic(PIN_TRIG, PIN_ECHO, PULSE_TIMEOUT_US);
+
+static MeasurementLog g_store;
 
 static RunMode g_mode = RunMode::PERIODIC;
 
@@ -56,6 +59,16 @@ void setup()
 	Serial.println("ESP32-C3 ultrasonic + U8g2 OLED starting...");
 	Serial.printf("Reset reason (CPU0): %d\n", static_cast<int>(esp_reset_reason()));
 
+	if (!g_store.begin())
+		Serial.println("MeasurementStore: begin() failed");
+
+	// Per requirement: entering DEBUG mode clears stored measurements.
+	if (g_mode == RunMode::DEBUG_CONTINUOUS)
+	{
+		Serial.println("DEBUG mode: clearing stored measurements");
+		g_store.clear();
+	}
+
 	if (g_mode == RunMode::DEBUG_CONTINUOUS)
 		Serial.println("Mode: DEBUG (continuous). Double-reset detected.");
 	else
@@ -68,6 +81,14 @@ void loop()
 
 	// Take 9 samples, require at least 5 valid ones to form a robust median
 	const MeasureResult res = g_ultrasonic.measureMedian(9, 5);
+
+	// Persist valid sample in periodic mode.
+	if (g_mode == RunMode::PERIODIC && res.status == MeasureStatus::OK)
+	{
+		const uint32_t uptimeSeconds = millis() / 1000UL;
+		if (!g_store.append(res.distanceCm, uptimeSeconds))
+			Serial.println("MeasurementStore: append failed");
+	}
 
 	u8g2.clearBuffer();
 	u8g2.setFont(u8g2_font_5x7_tf);

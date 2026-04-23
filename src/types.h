@@ -20,3 +20,9 @@ struct MeasureResult
 	float distanceCm;
 	uint8_t validSamples; // how many samples were OK (used for median)
 };
+
+struct StoredSample
+{
+	uint32_t uptimeSeconds; // seconds since boot when sample taken
+	float distanceCm;       // measured distance in cm
+};
