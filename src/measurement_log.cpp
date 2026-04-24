@@ -2,6 +2,7 @@
 
 #include <FS.h>
 #include <LittleFS.h>
+#include <stdio.h>
 
 namespace {
 	static constexpr const char *LOG_PATH = "/meas.csv";
@@ -26,7 +27,10 @@ bool MeasurementLog::begin()
 		      static_cast<unsigned>(usedBytes()),
 		      static_cast<unsigned>(freeBytes()));
 
-	return ensureLogFileExists();
+	if (!ensureLogFileExists())
+		return false;
+
+	return rebuildSampleCount();
 }
 
 bool MeasurementLog::clear()
@@ -37,7 +41,11 @@ bool MeasurementLog::clear()
 		return false;
 	}
 
-	return ensureLogFileExists();
+	if (!ensureLogFileExists())
+		return false;
+
+	sampleCount_ = 0;
+	return true;
 }
 
 bool MeasurementLog::append(const float distanceCm, const uint32_t uptimeSeconds)
@@ -58,6 +66,10 @@ bool MeasurementLog::append(const float distanceCm, const uint32_t uptimeSeconds
 	f.printf("%lu,%.2f\n", static_cast<unsigned long>(uptimeSeconds), distanceCm);
 	const bool ok = (f.getWriteError() == 0);
 	f.close();
+
+	if (ok)
+		sampleCount_++;
+
 	return ok;
 }
 
@@ -76,6 +88,59 @@ size_t MeasurementLog::freeBytes() const
 	const size_t total = totalBytes();
 	const size_t used = usedBytes();
 	return (used >= total) ? 0U : (total - used);
+}
+
+size_t MeasurementLog::sampleCount() const
+{
+	return sampleCount_;
+}
+
+String MeasurementLog::readJson() const
+{
+	String json;
+	json.reserve(sampleCount_ * 40 + 2);
+	json += "[";
+
+	if (!LittleFS.exists(LOG_PATH))
+	{
+		json += "]";
+		return json;
+	}
+
+	File f = LittleFS.open(LOG_PATH, "r");
+	if (!f)
+	{
+		Serial.println("MeasurementLog: failed to open log for JSON read");
+		json += "]";
+		return json;
+	}
+
+	bool first = true;
+	while (f.available())
+	{
+		const String line = f.readStringUntil('\n');
+		if (line.length() == 0)
+			continue;
+
+		unsigned long uptimeSeconds = 0;
+		float distanceCm = 0.0f;
+		if (sscanf(line.c_str(), "%lu,%f", &uptimeSeconds, &distanceCm) != 2)
+			continue;
+
+		if (!first)
+			json += ",";
+
+		first = false;
+		json += "{\"uptimeSeconds\":";
+		json += String(uptimeSeconds);
+		json += ",\"distanceCm\":";
+		json += String(distanceCm, 2);
+		json += "}";
+	}
+
+	f.close();
+	json += "]";
+	return json;
 }
 
 bool MeasurementLog::ensureLogFileExists()
@@ -101,4 +166,31 @@ bool MeasurementLog::maybeRotateByReset()
 
 	Serial.println("MeasurementLog: low LittleFS space; resetting log file");
 	return clear();
+}
+
+bool MeasurementLog::rebuildSampleCount()
+{
+	sampleCount_ = 0;
+
+	File f = LittleFS.open(LOG_PATH, "r");
+	if (!f)
+	{
+		Serial.println("MeasurementLog: failed to open log for counting");
+		return false;
+	}
+
+	while (f.available())
+	{
+		const String line = f.readStringUntil('\n');
+		if (line.length() == 0)
+			continue;
+
+		unsigned long uptimeSeconds = 0;
+		float distanceCm = 0.0f;
+		if (sscanf(line.c_str(), "%lu,%f", &uptimeSeconds, &distanceCm) == 2)
+			sampleCount_++;
+	}
+
+	f.close();
+	return true;
 }

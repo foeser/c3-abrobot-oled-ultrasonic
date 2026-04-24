@@ -28,6 +28,13 @@ public:
 	// Append one sample line to the CSV
 	bool append(float distanceCm, uint32_t uptimeSeconds);
 
+	// Number of valid samples currently known in the log
+	size_t sampleCount() const;
+
+	// Return all valid samples as a JSON array:
+	// [{"uptimeSeconds":123,"distanceCm":45.6}, ...]
+	String readJson() const;
+
 	size_t totalBytes() const;
 	size_t usedBytes() const;
 	size_t freeBytes() const;
@@ -35,4 +42,7 @@ public:
 private:
 	bool ensureLogFileExists();
 	bool maybeRotateByReset();
+	bool rebuildSampleCount();
+
+	size_t sampleCount_ = 0;
 };
