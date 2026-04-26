@@ -38,7 +38,7 @@ static UltrasonicSensor g_ultrasonic(PIN_TRIG, PIN_ECHO, PULSE_TIMEOUT_US);
 
 static MeasurementLog g_store;
 
-static constexpr uint32_t PERIODIC_INTERVAL_MS = 60UL * 60UL * 1000UL; // 1 hour
+static constexpr uint32_t PERIODIC_INTERVAL_MS = 2UL * 60UL * 60UL * 1000UL; // 2 hour
 static constexpr uint32_t DEBUG_INTERVAL_MS = 250UL;
 
 static constexpr const char *AP_SSID = "TankMonitor";

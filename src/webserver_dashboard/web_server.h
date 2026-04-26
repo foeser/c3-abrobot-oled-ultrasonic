@@ -9,6 +9,7 @@
 //
 // Endpoints:
 // - GET  /                 : offline dashboard HTML (embedded, no external CDN)
+// - GET  /api/status       : JSON with heap/fragmentation info
 // - GET  /api/measurements : JSON with stored samples + storage stats
 // - POST /api/clear        : clears stored measurement log
 //

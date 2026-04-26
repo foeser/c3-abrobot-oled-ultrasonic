@@ -2,6 +2,7 @@
 
 #include <WebServer.h>
 #include <WiFi.h>
+#include <esp_heap_caps.h>
 
 #include "web_dashboard_html.h"
 
@@ -15,6 +16,26 @@ namespace {
 	void handleIndex()
 	{
 		g_server.send_P(200, "text/html; charset=utf-8", WEB_DASHBOARD_HTML);
+	}
+
+	// Heap/fragmentation status endpoint
+	// Observe RAM headroom and fragmentation (largest free block) for JSON-building safety
+	void handleStatus()
+	{
+		const uint32_t freeHeap = static_cast<uint32_t>(ESP.getFreeHeap());
+		const uint32_t largestFreeBlock8 =
+			static_cast<uint32_t>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+
+		String response;
+		response.reserve(140);
+
+		response += "{\"ok\":true,\"heap\":{\"freeHeap\":";
+		response += String(freeHeap);
+		response += ",\"largestFreeBlock8\":";
+		response += String(largestFreeBlock8);
+		response += "}}";
+
+		g_server.send(200, "application/json", response);
 	}
 
 	// Returns JSON for the dashboard:
@@ -93,6 +114,7 @@ void webServerBegin(const char *ssid,
 	Serial.println(WiFi.softAPIP());
 
 	g_server.on("/", HTTP_GET, handleIndex);
+	g_server.on("/api/status", HTTP_GET, handleStatus);
 	g_server.on("/api/measurements", HTTP_GET, handleMeasurements);
 	g_server.on("/api/clear", HTTP_POST, handleClear);
 	g_server.onNotFound(handleNotFound);

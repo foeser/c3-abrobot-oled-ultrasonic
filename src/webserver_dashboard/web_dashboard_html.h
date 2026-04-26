@@ -16,7 +16,7 @@
 // UI-derived values (computed in JS from samples[]):
 // - Latest/Min/Max
 // - Δ (last sample) = latest - previous (needs >= 2 samples)
-// - Δ (last 24)     = latest - value 24 intervals ago (needs >= 25 samples)
+// - Δ (last 12)     = latest - value 12 intervals ago (needs >= 13 samples)
 
 const char WEB_DASHBOARD_HTML[] PROGMEM = R"html(
 <!DOCTYPE html>
@@ -147,8 +147,13 @@ const char WEB_DASHBOARD_HTML[] PROGMEM = R"html(
         <div class="value" id="deltaLast">-</div>
       </div>
       <div class="card">
-        <div class="label">Δ (last 24 samples)</div>
-        <div class="value" id="delta24">-</div>
+        <div class="label">Δ (last 12 samples)</div>
+        <div class="value" id="delta12">-</div>
+      </div>
+      <div class="card">
+        <div class="label">Heap</div>
+        <div class="value" id="heapFree">-</div>
+        <div class="subvalue" id="heapLargest">-</div>
       </div>
       <div class="card">
         <div class="label">Storage</div>
@@ -191,19 +196,20 @@ const char WEB_DASHBOARD_HTML[] PROGMEM = R"html(
           if (el) el.textContent = value;
         }
 
+        function renderStatus(status) {
+          setText("heapFree", fmtBytes(status.heap?.freeHeap) + " free");
+          setText("heapLargest", "largest block: " + fmtBytes(status.heap?.largestFreeBlock8));
+        }
+
         function renderMeta(data) {
           const samples = data.samples || [];
-          setText("sampleCount", String(data.sampleCount ?? samples.length));
-
-          setText("storageUsed", fmtBytes(data.storage?.usedBytes) + " used");
-          setText("storageFree", fmtBytes(data.storage?.freeBytes) + " free");
 
           if (!samples.length) {
             setText("latest", "-");
             setText("min", "-");
             setText("max", "-");
             setText("deltaLast", "-");
-            setText("delta24", "-");
+            setText("delta12", "-");
             return;
           }
 
@@ -220,9 +226,9 @@ const char WEB_DASHBOARD_HTML[] PROGMEM = R"html(
           const deltaLast = Number.isFinite(prev) ? (latest - prev) : NaN;
           setText("deltaLast", fmtDeltaCm(deltaLast));
 
-          const back24 = (values.length >= 25) ? values[values.length - 25] : NaN;
-          const delta24 = Number.isFinite(back24) ? (latest - back24) : NaN;
-          setText("delta24", fmtDeltaCm(delta24));
+          const back12 = (values.length >= 13) ? values[values.length - 13] : NaN;
+          const delta12 = Number.isFinite(back12) ? (latest - back12) : NaN;
+          setText("delta12", fmtDeltaCm(delta12));
         }
 
         function renderChart(samples) {
@@ -282,6 +288,18 @@ const char WEB_DASHBOARD_HTML[] PROGMEM = R"html(
           `;
         }
 
+    async function loadStatus() {
+      const res = await fetch("/api/status", { cache: "no-store" });
+      if (!res.ok)
+        throw new Error("Failed to load status");
+
+      const status = await res.json();
+      if (!status.ok)
+        throw new Error(status.error || "Status failed");
+
+      renderStatus(status);
+    }
+
     async function loadMeasurements() {
       const res = await fetch("/api/measurements", { cache: "no-store" });
       if (!res.ok)
@@ -304,18 +322,19 @@ const char WEB_DASHBOARD_HTML[] PROGMEM = R"html(
       if (!data.ok)
         throw new Error(data.error || "Clear failed");
 
+      await loadStatus();
       await loadMeasurements();
     }
 
     document.getElementById("refreshBtn").addEventListener("click", () => {
-      loadMeasurements().catch(err => alert(err.message));
+      Promise.all([loadStatus(), loadMeasurements()]).catch(err => alert(err.message));
     });
 
     document.getElementById("clearBtn").addEventListener("click", () => {
       clearLog().catch(err => alert(err.message));
     });
 
-    loadMeasurements().catch(err => {
+    Promise.all([loadStatus(), loadMeasurements()]).catch(err => {
       document.getElementById("chartContainer").innerHTML =
         '<div class="empty">Failed to load measurements</div>';
       alert(err.message);
