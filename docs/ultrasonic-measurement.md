@@ -1,8 +1,8 @@
 # Ultrasonic Measurement (AJ-SR04M)
 
-This document explains the logic behind the distance measurement and filtering implemented in `src/main.cpp`.
+This document explains the logic behind the distance measurement and filtering implemented in `src/ultrasonic.cpp` (API in `src/ultrasonic.h`).
 
-## 1. Single Measurement (`measureDistanceCmOnce`)
+## 1. Single Measurement (`UltrasonicSensor::measureOnce()`)
 
 The sensor measures distance by sending an ultrasonic pulse and timing how long it takes for the echo to return.
 
@@ -10,12 +10,12 @@ The sensor measures distance by sending an ultrasonic pulse and timing how long 
 - **Timeout:** If no pulse is received within the specified timeout, `pulseIn()` returns `0`. This is our primary indicator of "No echo / Too far".
 - **Distance Calculation:** The time is converted to distance using the speed of sound (~343 m/s or 0.0343 cm/µs). We multiply the duration by the speed and divide by 2 (since the sound traveled to the object and back).
 
-## 2. Filtering with Median (`measureDistanceCmMedian`)
+## 2. Filtering with Median (`UltrasonicSensor::measureMedian(samples, minValidRequired)`)
 
 Ultrasonic sensors can occasionally produce wildly inaccurate readings (spikes or outliers) due to random reflections, acoustic noise, or multipath interference in enclosed spaces like tanks. A simple average would be heavily skewed by a single bad reading.
 
 Instead, we use a **robust median filter with a minimum quorum**:
-1. Take a larger burst of readings (e.g., 9 samples).
+1. Take a larger burst of readings (e.g., 9 samples; internally capped to 15).
 2. Discard invalid readings (timeouts).
 3. **Quorum Check**: Require a minimum number of valid readings (e.g., at least 5) to proceed. This prevents trusting a median built from just 1 or 2 stray echoes.
 4. Sort the remaining valid readings in ascending order.
@@ -25,13 +25,13 @@ Instead, we use a **robust median filter with a minimum quorum**:
 ### Step-by-Step Logic
 
 #### a. Collection
-We loop `samples` times. If a reading is valid (`OK`), we store it in the `validReadings` array and increment `validCount`. We delay 30ms between readings to prevent acoustic interference between pulses.
+We loop `samples` times (capped at 15). If a reading is valid (`OK`), we store it in the `validReadings` array and increment `validCount`. We delay 30ms between readings to prevent acoustic interference between pulses.
 
 #### b. Error Handling (Quorum)
 If `validCount < minValidRequired`, we immediately return `ERROR`. We don't have enough confidence in the data.
 
 #### c. Sorting
-We sort the `validReadings` array ascending using a simple Bubble Sort algorithm. While inefficient for large datasets, it is perfectly fine for arrays of < 15 elements.
+We sort the `validReadings` array ascending using a simple Bubble Sort algorithm. While inefficient for large datasets, it is perfectly fine for arrays of <= 15 elements.
 
 #### d. Median Calculation (Odd vs Even)
 Finding the middle element depends on how many valid readings we have:
@@ -53,7 +53,7 @@ Imagine we ask for 9 samples, require 5 valid, and the sensor returns:
    - Valid readings: `[51.0, 50.5, 200.0, 51.2, 50.8, 51.5, 10.0]`. `validCount` = 7.
 2. **Quorum:**
    - `7 >= 5`, so we proceed.
-3. **Sorting:** 
+3. **Sorting:**
    - Sorted ascending: `[10.0, 50.5, 50.8, 51.0, 51.2, 51.5, 200.0]`
 4. **Median:**
    - `validCount` is 7 (odd). Median index = 3.

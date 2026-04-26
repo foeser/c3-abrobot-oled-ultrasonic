@@ -50,7 +50,7 @@ bool MeasurementLog::clear()
 
 bool MeasurementLog::append(const float distanceCm, const uint32_t uptimeSeconds)
 {
-	if (!maybeRotateByReset())
+	if (!rotateLogOnLowFreeSpace())
 		return false;
 
 	if (!ensureLogFileExists())
@@ -159,7 +159,7 @@ bool MeasurementLog::ensureLogFileExists()
 	return true;
 }
 
-bool MeasurementLog::maybeRotateByReset()
+bool MeasurementLog::rotateLogOnLowFreeSpace()
 {
 	if (freeBytes() >= MIN_FREE_BYTES)
 		return true;

@@ -41,7 +41,7 @@ public:
 
 private:
 	bool ensureLogFileExists();
-	bool maybeRotateByReset();
+	bool rotateLogOnLowFreeSpace();
 	bool rebuildSampleCount();
 
 	size_t sampleCount_ = 0;
