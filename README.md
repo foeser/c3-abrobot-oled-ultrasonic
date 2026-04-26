@@ -39,7 +39,14 @@ It is not designed as a “clone → compile → run” project without adapting
   - Important: the sensor may output **5V on ECHO** but ESP32‑C3 GPIOs are **3.3V max**, so use a **resistor divider** on ECHO.
   - Wiring: sensor **ECHO → 1 kΩ → node → ESP32 GPIO0**, and **node → 2 kΩ → GND** (e.g., two 1 kΩ in series). For the math see `src/ultrasonic.h`.
     
-![ECHO resistor divider (5V to 3.3V)](docs/img/resistor_divider.png)
+<figure>
+  <img src="docs/img/resistor_divider.png" alt="ECHO resistor divider (5V to 3.3V) as ASCII schema" />
+  <figcaption><sub>ECHO resistor divider (5V to 3.3V) as ASCII schema</sub></figcaption>
+</figure>
+<figure>
+  <img src="docs/img/wokwi_diagram.jpg" alt="Wokwi diagram of the build" height="600" />
+  <figcaption><sub><a href="https://wokwi.com/projects/462381852371787777">Wokwi diagram</a> to visualize build. Pins (I2C/GPIO) and resistor divider are matching. Sensor and display are different.</sub></figcaption>
+</figure>
 
 ## Measurement notes / caveats
 - Ultrasonic sensors are sensitive to mounting, reflections, foam, angled surfaces, and tank geometry.
