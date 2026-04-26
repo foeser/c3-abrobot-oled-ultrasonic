@@ -33,21 +33,26 @@ It is not designed as a “clone → compile → run” project without adapting
   - see https://www.fabian.com.mt/viewer/42585/pdf.pdf 
 
 ### Wiring Bread/Perf board
-- OLED I2C: **SDA=GPIO5**, **SCL=GPIO6** (based on boards specification)
-- AJ‑SR04M/Ultrasonic: **TRIG=GPIO2 (OUT)**, **ECHO=GPIO0 (IN)** (based on the current project defaults)
-  - output **5V on ECHO** but GPIOs are **3.3V max**, so use a **resistor divider** on ECHO (see `src/ultrasonic.h`).
+- ESP32-C3 OLED I2C: **SDA=GPIO5**, **SCL=GPIO6** (based on boards specification)
+- AJ‑SR04M/Ultrasonic to ESP32-C3: **TRIG=GPIO2 (OUT)**, **ECHO=GPIO0 (IN)** 
+  - as wired/soldered in this build but configurable in code
+  - Important: the sensor may output **5V on ECHO** but ESP32‑C3 GPIOs are **3.3V max**, so use a **resistor divider** on ECHO.
+  - Wiring: sensor **ECHO → 1 kΩ → node → ESP32 GPIO0**, and **node → 2 kΩ → GND** (e.g., two 1 kΩ in series). For the math see `src/ultrasonic.h`.
+    
+![ECHO resistor divider (5V to 3.3V)](docs/img/resistor_divider.png)
 
 ## Measurement notes / caveats
 - Ultrasonic sensors are sensitive to mounting, reflections, foam, angled surfaces, and tank geometry.
 - **Blind zone / near-field limitation:** at very short distances (below ~20 cm), the AJ‑SR04M may return unstable results (timeouts or inconsistent values).
   This project mitigates that by taking multiple samples **per measurement** and rejecting noisy bursts (median + minimum valid samples + spread check),
-  so too-close/garbage readings should typically result in a clear **measurement error** instead of a misleading distance.
+  so too-close/garbage readings should typically result in a clear **measurement error** instead of a misleading distance. See [`docs/ultrasonic-measurement.md`](docs/ultrasonic-measurement.md)
 
 ## Run modes (double reset) and Logging behavior
 Mode selection is done by a simple “double reset” toggle stored in NVS:
 - First boot after reset: runs **Periodic** and arms **Debug** for next boot
 - Second reset: runs **Debug** and clears the flag
-
+  
+Logging:
 - **Periodic mode**:
   - Takes a measurement every **2 hours**
   - Appends valid samples to the LittleFS CSV log (timestamp is **uptime seconds**, not wall-clock time)
@@ -64,9 +69,6 @@ Default credentials:
 
 ## Build / Flash
 Built with **PlatformIO** using the **Arduino framework** (Arduino-ESP32 core).
-
-## Further Documentation
-- Ultrasonic measurement/filtering notes: [`docs/ultrasonic-measurement.md`](docs/ultrasonic-measurement.md)
 
 ## Pictures
 
