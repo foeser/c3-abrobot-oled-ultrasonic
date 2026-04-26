@@ -22,6 +22,7 @@
 #include "run_mode.h"
 #include "ultrasonic.h"
 #include "measurement_log.h"
+#include "webserver_dashboard/web_server.h"
 
 // OLED: 72x40 I2C (GPIO6=SCL, GPIO5=SDA)
 // (U8g2 pins here override the default Wire pins)
@@ -39,6 +40,13 @@ static MeasurementLog g_store;
 
 static constexpr uint32_t PERIODIC_INTERVAL_MS = 60UL * 60UL * 1000UL; // 1 hour
 static constexpr uint32_t DEBUG_INTERVAL_MS = 250UL;
+
+static constexpr const char *AP_SSID = "TankMonitor";
+static constexpr const char *AP_PASSWORD = "tankmonitor";
+static const IPAddress AP_IP(192, 168, 4, 1);
+static const IPAddress AP_GATEWAY(192, 168, 4, 1);
+static const IPAddress AP_SUBNET(255, 255, 255, 0);
+
 static RunMode g_mode = RunMode::PERIODIC;
 static uint32_t g_measurementIntervalMs = PERIODIC_INTERVAL_MS;
 static uint32_t g_lastMeasurementAtMs = 0;
@@ -73,12 +81,15 @@ void setup()
 	else
 		Serial.println("Mode: PERIODIC (slow updates).");
 
+	webServerBegin(AP_SSID, AP_PASSWORD, AP_IP, AP_GATEWAY, AP_SUBNET, g_store);
+
 	// Trigger the first measurement immediately after boot
 	g_lastMeasurementAtMs = millis() - g_measurementIntervalMs;
 }
 
 void loop()
 {
+	webServerLoop();
 
 	const uint32_t nowMs = millis();
 
@@ -120,7 +131,6 @@ void loop()
 		case MeasureStatus::ERROR:
 			u8g2.drawStr(0, 22, "Measurement");
 			u8g2.drawStr(0, 32, "Failed");
-			Serial.printf("Distance: ERROR (valid: %u)\n", g_lastMeasurement.validSamples);
 			break;
 		case MeasureStatus::OK:
 		{
@@ -132,8 +142,6 @@ void loop()
 
 			u8g2.setFont(u8g2_font_5x7_tf);
 			u8g2.drawStr(56, 38, "cm");
-
-			Serial.printf("Distance: %.1f cm (median of %u valid)\n", g_lastMeasurement.distanceCm, g_lastMeasurement.validSamples);
 			break;
 		}
 	}
