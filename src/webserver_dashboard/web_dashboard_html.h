@@ -204,6 +204,10 @@ const char WEB_DASHBOARD_HTML[] PROGMEM = R"html(
         function renderMeta(data) {
           const samples = data.samples || [];
 
+          setText("sampleCount", String(data.sampleCount ?? samples.length));
+          setText("storageUsed", fmtBytes(data.storage?.usedBytes) + " used");
+          setText("storageFree", fmtBytes(data.storage?.freeBytes) + " free");
+
           if (!samples.length) {
             setText("latest", "-");
             setText("min", "-");

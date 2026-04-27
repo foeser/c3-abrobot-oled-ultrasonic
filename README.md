@@ -42,10 +42,10 @@ It is not designed as a “clone → compile → run” project without adapting
 <figure>
   <img src="docs/img/resistor_divider.png" alt="ECHO resistor divider (5V to 3.3V) as ASCII schema" />
   <figcaption><sub>ECHO resistor divider (5V to 3.3V) as ASCII schema</sub></figcaption>
-</figure>
+</figure><br/>
 <figure>
   <img src="docs/img/wokwi_diagram.jpg" alt="Wokwi diagram of the build" height="600" />
-  <figcaption><sub><a href="https://wokwi.com/projects/462381852371787777">Wokwi diagram</a> to visualize build. Pins (I2C/GPIO) and resistor divider are matching. Sensor and display are different.</sub></figcaption>
+  <figcaption><sub><a href="https://wokwi.com/projects/462381852371787777">Wokwi diagram</a> to visualize build. Pins (I2C/GPIO) and resistor divider are matching. Board design and Sensor are different.</sub></figcaption>
 </figure>
 
 ## Measurement notes / caveats
