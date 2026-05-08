@@ -105,7 +105,7 @@ void webServerBegin(const char *ssid,
 {
 	g_log = &log;
 
-	WiFi.mode(WIFI_AP);
+	// Important: do not set WiFi.mode() here; main() decides between WIFI_AP and WIFI_AP_STA.
 	WiFi.softAPConfig(ip, gateway, subnet);
 	WiFi.softAP(ssid, password);
 

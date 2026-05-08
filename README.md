@@ -24,21 +24,24 @@ It is not designed as a “clone → compile → run” project without adapting
   - Shows statistics (latest/min/max etc.) + simple chart of stored samples
   - Displays basic heap/fragmentation status
   - Allows clearing the stored log
+- Optional uplink (STA) + Adafruit IO:
+  - If STA credentials are configured, the ESP32 runs **AP + STA** (dashboard stays available on the SoftAP)
+  - In **Periodic mode**, valid samples are also published to **Adafruit IO via MQTT** (retain supported)
 
 ## Hardware
 - ABRobot ESP32‑C3 0.42″ OLED (ESP32‑C3 DevKitM‑1)
-    - see https://emalliab.wordpress.com/2025/02/12/esp32-c3-0-42-oled/
-    - any ESP32 would work, but see [Wiring Bread/Perf board](#wiring-breadperf-board) for this types display specifics
+  - see https://emalliab.wordpress.com/2025/02/12/esp32-c3-0-42-oled/
+  - any ESP32 would work, but see [Wiring Bread/Perf board](#wiring-breadperf-board) for this types display specifics
 - AJ‑SR04M ultrasonic sensor
-  - see https://www.fabian.com.mt/viewer/42585/pdf.pdf 
+  - see https://www.fabian.com.mt/viewer/42585/pdf.pdf
 
 ### Wiring Bread/Perf board
 - ESP32-C3 OLED I2C: **SDA=GPIO5**, **SCL=GPIO6** (based on boards specification)
-- AJ‑SR04M/Ultrasonic to ESP32-C3: **TRIG=GPIO2 (OUT)**, **ECHO=GPIO0 (IN)** 
+- AJ‑SR04M/Ultrasonic to ESP32-C3: **TRIG=GPIO2 (OUT)**, **ECHO=GPIO0 (IN)**
   - as wired/soldered in this build but configurable in code
   - Important: the sensor may output **5V on ECHO** but ESP32‑C3 GPIOs are **3.3V max**, so use a **resistor divider** on ECHO.
   - Wiring: sensor **ECHO → 1 kΩ → node → ESP32 GPIO0**, and **node → 2 kΩ → GND** (e.g., two 1 kΩ in series). For the math see `src/ultrasonic.h`.
-    
+
 <figure>
   <img src="docs/img/resistor_divider.png" alt="ECHO resistor divider (5V to 3.3V) as ASCII schema" />
   <figcaption><sub>ECHO resistor divider (5V to 3.3V) as ASCII schema</sub></figcaption>
@@ -58,11 +61,12 @@ It is not designed as a “clone → compile → run” project without adapting
 Mode selection is done by a simple “double reset” toggle stored in NVS:
 - First boot after reset: runs **Periodic** and arms **Debug** for next boot
 - Second reset: runs **Debug** and clears the flag
-  
+
 Logging:
 - **Periodic mode**:
   - Takes a measurement every **2 hours**
   - Appends valid samples to the LittleFS CSV log (timestamp is **uptime seconds**, not wall-clock time)
+  - Publishes the measured distance (cm) to Adafruit IO via MQTT (if configured, see below)
 - **Debug mode**:
   - Updates about every **250 ms**
   - Does **not** persist measurements (meant for quick testing / placement)
@@ -73,6 +77,23 @@ Default credentials:
 - Wi‑Fi SSID: `TankMonitor`
 - Wi‑Fi Password: `tankmonitor`
 - Open: `http://192.168.4.1/`
+
+## Adafruit IO MQTT (optional)
+Publishing to Adafruit IO is enabled only if **both** are configured at build time:
+- Wi‑Fi STA credentials (`WIFI_SSID`, `WIFI_PASS`)
+- Adafruit IO credentials (`AIO_USERNAME`, `AIO_KEY`)
+
+Feed/topic:
+- The feed key defaults to `distance-cm` (override with `AIO_FEED_DISTANCE_CM`)
+- MQTT topic format: `<AIO_USERNAME>/feeds/<AIO_FEED_DISTANCE_CM>`
+
+### Configuration (PlatformIO `platformio.ini`)
+This project uses `build_flags` macros for credentials and feed selection.
+Open `platformio.ini` and set them.
+Notes:
+- Leave `WIFI_SSID` empty to disable STA (AP-only dashboard mode) and therefore also disable Adafruit IO publishing.
+- `AIO_FEED_DISTANCE_CM` is the **feed key** (not a full topic). The topic is constructed as
+  `<AIO_USERNAME>/feeds/<AIO_FEED_DISTANCE_CM>`.
 
 ## Build / Flash
 Built with **PlatformIO** using the **Arduino framework** (Arduino-ESP32 core).

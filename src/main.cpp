@@ -16,13 +16,15 @@
 
 #include <Arduino.h>
 #include <U8g2lib.h>
-#include <Wire.h>
+#include <WiFiClient.h>
+
 
 #include "types.h"
 #include "run_mode.h"
 #include "ultrasonic.h"
 #include "measurement_log.h"
 #include "webserver_dashboard/web_server.h"
+#include "adafruitio_mqtt.h"
 
 // OLED: 72x40 I2C (GPIO6=SCL, GPIO5=SDA)
 // (U8g2 pins here override the default Wire pins)
@@ -51,6 +53,20 @@ static RunMode g_mode = RunMode::PERIODIC;
 static uint32_t g_measurementIntervalMs = PERIODIC_INTERVAL_MS;
 static uint32_t g_lastMeasurementAtMs = 0;
 static MeasureResult g_lastMeasurement = {MeasureStatus::ERROR, 0.0f, 0};
+
+#ifndef WIFI_SSID
+#define WIFI_SSID ""
+#endif
+#ifndef WIFI_PASS
+#define WIFI_PASS ""
+#endif
+
+static bool hasStaCredentials()
+{
+	return (WIFI_SSID[0] != '\0');
+}
+
+static AdafruitIoMqtt g_aio;
 
 void setup()
 {
@@ -81,7 +97,26 @@ void setup()
 	else
 		Serial.println("Mode: PERIODIC (slow updates).");
 
+	// WiFi: AP always on, STA optional (if WIFI_SSID provided)
+	if (hasStaCredentials())
+	{
+		WiFi.mode(WIFI_AP_STA);
+		WiFi.begin(WIFI_SSID, WIFI_PASS);
+		Serial.print("STA connecting to SSID: ");
+		Serial.println(WIFI_SSID);
+	}
+	else
+	{
+		WiFi.mode(WIFI_AP);
+		Serial.println("STA disabled (no WIFI_SSID set).");
+	}
+
+	// Start dashboard on AP interface (always)
 	webServerBegin(AP_SSID, AP_PASSWORD, AP_IP, AP_GATEWAY, AP_SUBNET, g_store);
+
+	// Adafruit IO MQTT (non-blocking; loop() will keep it alive)
+	g_aio.begin();
+	g_aio.setStatusLogIntervalMs(5000);
 
 	// Trigger the first measurement immediately after boot
 	g_lastMeasurementAtMs = millis() - g_measurementIntervalMs;
@@ -91,7 +126,29 @@ void loop()
 {
 	webServerLoop();
 
+	g_aio.loop();
+
+	// STA status logging
+	static uint32_t lastLogMs = 0;
 	const uint32_t nowMs = millis();
+	if (nowMs - lastLogMs > 5000)
+	{
+		lastLogMs = nowMs;
+
+		if (hasStaCredentials())
+		{
+			if (WiFi.status() == WL_CONNECTED)
+			{
+				Serial.print("STA connected, IP: ");
+				Serial.println(WiFi.localIP());
+			}
+			else
+			{
+				Serial.print("STA status: ");
+				Serial.println(static_cast<int>(WiFi.status()));
+			}
+		}
+	}
 
 	if (nowMs - g_lastMeasurementAtMs >= g_measurementIntervalMs)
 	{
@@ -102,20 +159,24 @@ void loop()
 		// Store timestamp after measurement so debug mode still waits 250ms between runs
 		g_lastMeasurementAtMs = millis();
 
-		// Persist valid sample in periodic mode
-		if (g_mode == RunMode::PERIODIC && g_lastMeasurement.status == MeasureStatus::OK)
+		const bool valid = (g_lastMeasurement.status == MeasureStatus::OK);
+
+		// Persist valid sample and publish to Adafruit IO in periodic mode
+		if (g_mode == RunMode::PERIODIC && valid)
 		{
 			const uint32_t uptimeSeconds = millis() / 1000UL;
 			if (!g_store.append(g_lastMeasurement.distanceCm, uptimeSeconds))
 				Serial.println("MeasurementLog: append failed");
+
+			g_aio.publishDistanceCm(g_lastMeasurement.distanceCm, true);
 		}
 
-		if (g_lastMeasurement.status == MeasureStatus::ERROR)
+		if (!valid)
 			Serial.printf("Distance: ERROR (valid: %u)\n", g_lastMeasurement.validSamples);
 		else
 			Serial.printf("Distance: %.1f cm (median of %u valid)\n",
-				      g_lastMeasurement.distanceCm,
-				      g_lastMeasurement.validSamples);
+					  g_lastMeasurement.distanceCm,
+					  g_lastMeasurement.validSamples);
 	}
 
 	u8g2.clearBuffer();
