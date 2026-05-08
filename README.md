@@ -1,6 +1,7 @@
 # ESP32‑C3 tank level monitor (AJ‑SR04M ultrasonic)
 
-Small ESP32‑C3 project that measures distance with an **AJ‑SR04M ultrasonic sensor**, shows the latest reading on the built‑in 0.42″ OLED of the **ABRobot ESP32‑C3** and provides a simple web dashboard with sample history.
+Small ESP32‑C3 project that measures distance with an **AJ‑SR04M ultrasonic sensor**, shows the latest reading on the built‑in 0.42″ OLED of the **ABRobot ESP32‑C3** 
+and provides a simple web dashboard with sample history. Optionally, the distance can be published to **Adafruit IO** via MQTT.
 
 Intended for tank monitoring (distance to liquid surface), e.g. fresh water, greywater, and black water tanks in RVs/holiday homes.
 The sensor measures **distance from the sensor to the liquid surface** (in cm). Converting this into a “fill level” (e.g. %) requires knowing the individual tank height and sensor mounting offset;
@@ -77,6 +78,11 @@ Default credentials:
 - Wi‑Fi SSID: `TankMonitor`
 - Wi‑Fi Password: `tankmonitor`
 - Open: `http://192.168.4.1/`
+
+If you also configure STA credentials (`WIFI_SSID`/`WIFI_PASS`), the ESP32 will connect to your router **in addition** to running the SoftAP.
+In that case the dashboard is typically reachable on:
+- SoftAP: `http://192.168.4.1/` (always)
+- STA: `http://<dhcp-leased-sta-ip>/` (check Serial output for the assigned IP)
 
 ## Adafruit IO MQTT (optional)
 Publishing to Adafruit IO is enabled only if **both** are configured at build time:
